@@ -33,7 +33,7 @@ export const useFriendStore = create((set, get) => ({
     }
   },
   acceptFriendRequest: async () => {
-
+    //function
   },
   declineFriendRequest: async () => {
 
