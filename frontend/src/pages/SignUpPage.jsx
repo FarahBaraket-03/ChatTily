@@ -6,7 +6,6 @@ import { Link } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
 import toast from "react-hot-toast";
 
-import { useGoogleLogin ,GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from "jwt-decode";
 
 
@@ -157,17 +156,6 @@ const SignUpPage = () => {
               )}
             </button>
             
-          {/* <button onClick={() => login()}>Sign in with Google 🚀</button> */}
-          <GoogleLogin 
-                            onSuccess={credentialResponse => {
-                              const userInfo = jwtDecode(credentialResponse.credential);
-                              console.log("Utilisateur :", userInfo);
-                             handleGoogleResponse(userInfo);
-                             }}
-                             onError={() => {
-                              console.log('Login Failed');
-                            }}
-                   />  
           </form>
 
          
