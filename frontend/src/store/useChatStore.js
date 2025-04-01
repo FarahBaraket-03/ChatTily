@@ -57,12 +57,42 @@ export const useChatStore = create((set, get) => ({
         messages: [...get().messages, newMessage],
       });
     });
+     socket.on("messageDeleted", (deletedMessageId) => {
+    set((state) => ({
+      messages: state.messages.filter((msg) => msg._id !== deletedMessageId),
+    }));
+  });
+  socket.on("messageUpdated", (updatedMessage) => {
+    set((state) => ({
+      messages: state.messages.map(msg =>
+        msg._id === updatedMessage._id ? updatedMessage : msg
+      ),
+    }));
+  });
   },
 
   unsubscribeFromMessages: () => {
     const socket = useAuthStore.getState().socket;
-    socket.off("newMessage");
+    if(socket){
+      socket.off("newMessage");
+    }
   },
+
+  deleteMessage: async (messageId) => {
+    try {
+      const res = await axiosInstance.patch(`/messages/${messageId}`, { isDeleted: true });
+      set((state) => ({
+        messages: state.messages.map(msg => 
+          msg._id === messageId ? res.data : msg
+        ),
+      }));
+    } catch (error) {
+      toast.error(error.response.data.message);
+    }
+  },
+  
+  
+  
 
   setSelectedUser: (selectedUser) => set({ selectedUser }),
 }));

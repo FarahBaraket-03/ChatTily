@@ -59,6 +59,16 @@ io.on("connection", (socket) => {
     delete userSocketMap[userId];
     io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
+
+  socket.on("unfriend", ({ userId, friendId }) => {
+    const friendSocketId = getReceiverSocketId(friendId);
+    if (friendSocketId) {
+      io.to(friendSocketId).emit("unfriended", {
+        userId,
+        friendId
+      });
+    }
+  });
 });
 
 export { io, app, server };

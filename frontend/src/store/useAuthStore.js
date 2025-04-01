@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
 import { io } from "socket.io-client";
-const BASE_URL = "http://localhost:5001" ;
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ;
 
 
 
@@ -18,11 +18,9 @@ export const useAuthStore = create((set, get) => ({
   checkAuth: async () => {
     try {
       const res = await axiosInstance.get("/auth/check");
-
       set({ authUser: res.data });
       get().connectSocket();
     } catch (error) {
-      console.log("Error in checkAuth:", error);
       set({ authUser: null });
     } finally {
       set({ isCheckingAuth: false });
@@ -60,12 +58,25 @@ export const useAuthStore = create((set, get) => ({
 
   logout: async () => {
     try {
+      // Clear auth state immediately to prevent further actions
+      set({ authUser: null, onlineUsers: [] });
+      
+      // Disconnect socket first to prevent any pending requests
+      const { socket } = get();
+      if (socket) {
+        socket.disconnect();
+        set({ socket: null });
+      }
+  
+      // Then send logout request to server
       await axiosInstance.post("/auth/logout");
-      set({ authUser: null });
+      
       toast.success("Logged out successfully");
-      get().disconnectSocket();
     } catch (error) {
-      toast.error(error.response.data.message);
+      console.error("Logout error:", error);
+      // Even if logout fails, ensure clean state
+      set({ authUser: null, socket: null, onlineUsers: [] });
+      toast.error(error.response?.data?.message || "Logout failed");
     }
   },
 
@@ -84,30 +95,54 @@ export const useAuthStore = create((set, get) => ({
   },
 
   connectSocket: () => {
-    const { authUser } = get();
-    if (!authUser || get().socket?.connected) return;
-
-    const socket = io(BASE_URL, {
-      query: {
-        userId: authUser._id,
-      },
+    const { authUser, socket } = get();
+    if (!authUser || socket) return; // Avoid multiple connections
+  
+    const newSocket = io(BASE_URL, {
+      query: { userId: authUser._id },
+      reconnection: true, // Allow reconnection
+      reconnectionAttempts: 5, // Retry a few times
+      reconnectionDelay: 1000, // Retry delay
     });
-    socket.connect();
-
-    set({ socket: socket });
-
-    socket.on("getOnlineUsers", (userIds) => {
+  
+    set({ socket: newSocket });
+  
+    newSocket.on("connect", () => {
+      console.log("Connected to socket server");
+    });
+  
+    newSocket.on("disconnect", () => {
+      console.log("Disconnected from socket server");
+    });
+  
+    newSocket.on("connect_error", (err) => {
+      console.log("Socket connection error:", err);
+      toast.error("Failed to connect to socket server");
+    });
+  
+    newSocket.on("getOnlineUsers", (userIds) => {
       set({ onlineUsers: userIds });
     });
   },
+  
   disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+    const { socket } = get();
+    if (socket) {
+      // Clean up all event listeners
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('connect_error');
+      socket.off('getOnlineUsers');
+      
+      socket.disconnect();
+      set({ socket: null });
+      console.log("Socket disconnected");
+    }
   },
 
 getUserById: async (userId) => {
   try {
     const res = await axiosInstance.get(`/auth/user/${userId}`);
-    console.log(res.data);
     return res.data;
   } catch (error) {
     toast.error(error.response?.data?.message || "Failed to fetch user");

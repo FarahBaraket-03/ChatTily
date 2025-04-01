@@ -3,49 +3,78 @@ import { useChatStore } from "../store/useChatStore";
 import { useAuthStore } from "../store/useAuthStore";
 import { useGroupChatStore } from "../store/useGroupChatStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
-import { Users, Plus ,Trash2  } from "lucide-react";
+import { Users, Plus, Trash2 } from "lucide-react";
 import GroupChatModal from "./GroupChatModal";
 import avatar from "../resources/avatar.png";
+import { useFriendStore } from "../store/useFriendStore";
+import { toast } from 'react-hot-toast'; 
+
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
+  const { getUsers, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
   const { groupChats, fetchGroupChats, setSelectedGroupChat, selectedGroupChat, deleteGroupChat } = useGroupChatStore();
   const { onlineUsers, authUser } = useAuthStore();
+  const { friends } = useFriendStore();
 
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
   const [showGroups, setShowGroups] = useState(false);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     getUsers();
     fetchGroupChats();
   }, [getUsers, fetchGroupChats]);
 
-  const filteredUsers = users.filter(
+  const filteredUsers = friends.filter(
     (user) => (!showOnlineOnly || onlineUsers.includes(user._id))
   );
 
-    
-
-   // Check if the current user is the admin of the selected group chat
-   const isAdmin = selectedGroupChat?.admin === authUser?._id;
-
-    // Handle group chat deletion
+  // Handle group chat deletion
   const handleDeleteGroupChat = async () => {
-    if (window.confirm("Are you sure you want to delete this group chat?")) {
-      try {
-        await deleteGroupChat(selectedGroupChat._id);
-        setSelectedGroupChat(null); // Clear the selected group chat after deletion
-      } catch (error) {
-        console.error("Failed to delete group chat:", error);
-      }
+    try {
+      await deleteGroupChat(selectedGroupChat._id);
+      setSelectedGroupChat(null);
+      setShowDeleteConfirm(false);
+      toast.success("Group chat deleted successfully");
+    } catch (error) {
+      console.error("Failed to delete group chat:", error);
+      toast.error("Failed to delete group chat");
     }
-  }
+  };
 
   if (isUsersLoading) return <SidebarSkeleton />;
-  
 
   return (
     <aside className="h-full w-20 lg:w-72 border-r border-base-300 flex flex-col transition-all duration-200">
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div role="alert" className="alert bg-base-100 shadow-lg max-w-md">
+            <svg xmlns="http://www.w3.org/2000/svg" className="stroke-error shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div>
+              <h3 className="font-bold">Delete Group Chat</h3>
+              <div className="text-sm">Are you sure you want to delete this group chat? This action cannot be undone.</div>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                className="btn btn-sm"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-sm btn-error"
+                onClick={handleDeleteGroupChat}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="border-b border-base-300 w-full p-5">
         <div className="flex items-center gap-2">
           <Users className="size-6" />
@@ -72,7 +101,7 @@ const Sidebar = () => {
           <button
             onClick={() => {
               setShowGroups(!showGroups);
-              setSelectedUser(null); // Clear selected user when switching to groups
+              setSelectedUser(null);
             }}
             className="btn btn-sm btn-outline"
           >
@@ -98,7 +127,7 @@ const Sidebar = () => {
               key={group._id}
               onClick={() => {
                 setSelectedGroupChat(group);
-                setSelectedUser(null); // Clear selected user when selecting a group
+                setSelectedUser(null);
               }}
               className={`
                 w-full p-3 flex items-center gap-3
@@ -120,12 +149,9 @@ const Sidebar = () => {
                   {group.members.length} members
                 </div>
               </div>
-
-
-               {/* Delete button for admin */}
-               {selectedGroupChat?._id === group._id && isAdmin && (
+              {selectedGroupChat?._id === group._id && (selectedGroupChat?.admin === authUser?._id || selectedGroupChat?.admin._id === authUser?._id) && (
                 <button
-                  onClick={handleDeleteGroupChat}
+                  onClick={() => setShowDeleteConfirm(true)}
                   className="btn btn-sm btn-error ml-auto"
                 >
                   <Trash2 className="size-4" />
@@ -139,7 +165,7 @@ const Sidebar = () => {
               key={user._id}
               onClick={() => {
                 setSelectedUser(user);
-                setSelectedGroupChat(null); // Clear selected group when selecting a user
+                setSelectedGroupChat(null);
               }}
               className={`
                 w-full p-3 flex items-center gap-3

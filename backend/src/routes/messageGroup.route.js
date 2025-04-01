@@ -8,7 +8,8 @@ import {
   leaveGroupChat,
   addMemberToGroup,
   getNonMembers,
-  deleteGroupChat, // Add this
+  deleteGroupChat,
+  deleteGroupMessage,
 } from "../controllers/messageGroup.controller.js";
 
 const router = express.Router();
@@ -22,5 +23,5 @@ router.post("/leave/:id", protectRoute, leaveGroupChat); // Leave a group chat
 router.post("/add-member/:chatId", protectRoute, addMemberToGroup); // Add a member to a group chat
 router.get("/group/non-members/:id", protectRoute, getNonMembers); // Fetch non-members
 router.delete("/group/:id", protectRoute, deleteGroupChat); // Delete a group chat
-
+router.patch("/group/messages/:id", protectRoute, deleteGroupMessage);
 export default router;

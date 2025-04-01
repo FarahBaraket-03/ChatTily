@@ -1,23 +1,37 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/useAuthStore";
-import { useChatStore } from "../store/useChatStore"; // 🔹 Import user store
-import { LogOut, MessageSquare, Settings, User } from "lucide-react";
-import avatar from "../resources/avatar.png"; // 🔹 Default avatar
-//import NoChatSelected from "../components/NoChatSelected";
-//import ChatContainer from "../components/ChatContainer";
-//import { getUserChats } from "../../../backend/src/controllers/chat.controller";
+import { useChatStore } from "../store/useChatStore";
+import { LogOut, MessageSquare, Settings, User, Bell } from "lucide-react";
+import avatar from "../resources/avatar.png";
+import { useFriendStore } from "../store/useFriendStore";
+import { useEffect, useState } from "react";
 
 const Navbar = ({ searchQuery, setSearchQuery }) => {
   const { logout, authUser } = useAuthStore();
-  const { users } = useChatStore(); // 🔹 Get users from store
+  const { friendRequests, getFriendRequests, isLoading: isFriendLoading } = useFriendStore();
+  const { users } = useChatStore();
+  const navigate = useNavigate();
+  const [isSearching, setIsSearching] = useState(false);
 
-  // 🔹 Filter users based on search query
+  useEffect(() => {
+    if (authUser && !isFriendLoading) {
+      getFriendRequests();
+    }
+  }, [authUser, getFriendRequests, isFriendLoading]);
+
   const filteredUsers = searchQuery
     ? users.filter((user) =>
         user.fullName.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : [];
-  //const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
+
+  const handleUserSelect = (userId) => {
+    setSearchQuery("");
+    setIsSearching(true);
+    navigate(`/profile/${userId}`);
+    // Reset searching state after navigation
+    setTimeout(() => setIsSearching(false), 500);
+  };
 
   return (
     <header className="bg-base-100 border-b border-base-300 fixed w-full top-0 z-40 backdrop-blur-lg bg-base-100/80">
@@ -32,58 +46,80 @@ const Navbar = ({ searchQuery, setSearchQuery }) => {
               <h1 className="text-lg font-bold">Chatty</h1>
             </Link>
 
-            {/* 🔹 Search Bar */}
-            <div className="relative">
-              <input
-                type="search"
-                required
-                placeholder="Search users..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="px-3 py-1 rounded-md border border-gray-300 focus:outline-none focus:ring focus:ring-blue-300 text-white w-64"
-              />
-              
-              {/* 🔹 Search Results Dropdown */}
-              {searchQuery && filteredUsers.length > 0 && (
-                <div className="absolute top-10 left-0 w-64 bg-white shadow-lg rounded-md overflow-hidden z-50">
-                  {filteredUsers.map((user) => (
-                    <Link
-                      key={user._id}
-                      to={`/profile/${user?._id}`} // 🔹 Link to user profile
-                      className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 transition"
-                      onClick={() => setSearchQuery("") }// 🔹 Clear search on selection
-                    >
-                      <img
-                        src={user.profilePic || avatar}
-                        alt={user.fullName}
-                        className="size-8 object-cover rounded-full"
-                      />
-                      <span className="text-sm">{user.fullName}</span>
-                    </Link>
-                  ))}
-                  
-                </div>
-              )}
+            {/* Search Bar */}
+            {authUser && (
+              <div className="relative">
+                <input
+                  type="search"
+                  required
+                  placeholder="Search users..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="px-3 py-1 rounded-md border border-gray-300 focus:outline-none focus:ring focus:ring-blue-300 text-white w-64"
+                />
+                
+                {searchQuery && filteredUsers.length > 0 && (
+                  <div className="absolute top-10 left-0 w-64 bg-white shadow-lg rounded-md overflow-hidden z-50">
+                    {filteredUsers.map((user) => (
+                      <button
+                        key={user._id}
+                        onClick={() => handleUserSelect(user._id)}
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-gray-100 transition w-full text-left"
+                      >
+                        <img
+                          src={user.profilePic || avatar}
+                          alt={user.fullName}
+                          className="size-8 object-cover rounded-full"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = avatar;
+                          }}
+                        />
+                        <span className="text-sm">{user.fullName}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
-              {/* 🔹 No Users Found */}
-              {searchQuery && filteredUsers.length === 0 && (
-                <div className="absolute top-10 left-0 w-64 bg-white shadow-lg rounded-md p-3 text-gray-500 text-sm">
-                  No users found.
-                </div>
-              )}
-            </div>
+                {searchQuery && filteredUsers.length === 0 && (
+                  <div className="absolute top-10 left-0 w-64 bg-white shadow-lg rounded-md p-3 text-gray-500 text-sm">
+                    No users found.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
-          {/* Profile & Logout */}
+          {/* Profile & Logout & Bell notif */}
           <div className="flex items-center gap-2">
+            {authUser && (
+              <div className="indicator">
+                {friendRequests.length !== 0 && (
+                  <span className="indicator-item badge badge-secondary">
+                    {friendRequests.length}
+                  </span>
+                )}
+                <Link to="/notify">
+                  <Bell className="size-7" />
+                </Link>
+              </div>
+            )}
+
             <Link to="/settings" className="btn btn-sm gap-2 transition-colors">
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Settings</span>
             </Link>
-
+            
             {authUser && (
               <>
-                <Link to={`/profile/${authUser?._id}`} className="btn btn-sm gap-2">
+                <Link 
+                  to="/profileUser" 
+                  className="btn btn-sm gap-2"
+                  onClick={() => {
+                    setSearchQuery("");
+                    setIsSearching(true);
+                  }}
+                >
                   <User className="size-5" />
                   <span className="hidden sm:inline">Profile</span>
                 </Link>

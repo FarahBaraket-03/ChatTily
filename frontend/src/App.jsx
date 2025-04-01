@@ -13,20 +13,26 @@ import { useState, useEffect } from "react";
 
 import { Loader } from "lucide-react";
 import { Toaster } from "react-hot-toast";
+import Notification from "./pages/Notification";
+import { useFriendStore } from "./store/useFriendStore";
+import CurrentUserProfile from "./pages/CurrentUserProfile";
 
 const App = () => {
-  const { authUser, checkAuth, isCheckingAuth, onlineUsers } = useAuthStore();
+  const { authUser, checkAuth, isCheckingAuth } = useAuthStore();
+  const { getAllFriends,getFriendRequests}=useFriendStore();
   const { theme } = useThemeStore();
 
-  console.log({ onlineUsers });
-  
   const [searchQuery, setSearchQuery] = useState(""); 
 
   useEffect(() => {
     checkAuth();
-  }, [checkAuth]);
+    if(authUser){
+      getAllFriends();
+      getFriendRequests();
+    }
+  }, [checkAuth,getAllFriends,getFriendRequests,authUser]);
 
-  console.log({ authUser });
+  
 
   if (isCheckingAuth && !authUser)
     return (
@@ -45,6 +51,8 @@ const App = () => {
         <Route path="/login" element={!authUser ? <LoginPage /> : <Navigate to="/" />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/profile/:userId" element={authUser ? <ProfilePage /> : <Navigate to="/login" />} />
+        <Route path="/notify" element={authUser ? <Notification /> : <Navigate to="/login" />} />
+        <Route path="/profileUser" element={authUser ? <CurrentUserProfile /> : <Navigate to="/login" />} />
       </Routes>
 
       <Toaster />

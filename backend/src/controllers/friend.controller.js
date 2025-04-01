@@ -9,19 +9,19 @@ export const sendFriendRequest = async (req, res) => {
     //   return res.status(400).json({ message: "You cannot send a request to yourself." });
     // }
 
-    const sender = req.user._id;
+    const sender =  await User.findById(req.user._id);
     const receiver = await User.findById(receiverId);
 
     if (!receiver) return res.status(404).json({ message: "User not found." });
 
-    if (receiver.friendRequests.includes(sender)) {
+    if (receiver.friendRequests.includes(req.user._id)) {
       return res.status(400).json({ message: "Friend request already sent." });
     }
-
-    receiver.friendRequests.push(sender);
-    await receiver.save();
-
-    res.status(200).json({ message: "Friend request sent successfully." });
+    else{
+      receiver.friendRequests.push(req.user);
+      await receiver.save();
+      res.status(200).json({ message: "Friend request sent successfully." });
+    }
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -30,9 +30,9 @@ export const sendFriendRequest = async (req, res) => {
 // Accept a friend request
 export const acceptFriendRequest = async (req, res) => {
   try {
-    const { userId, senderId } = req.body;
+    const {  senderId } = req.body;
 
-    const user = await User.findById(userId);
+    const user = await User.findById(req.user._id);
     const sender = await User.findById(senderId);
 
     if (!user || !sender) return res.status(404).json({ message: "User not found." });
@@ -41,8 +41,8 @@ export const acceptFriendRequest = async (req, res) => {
       return res.status(400).json({ message: "No friend request from this user." });
     }
 
-    user.friends.push(senderId);
-    sender.friends.push(userId);
+    user.friends.push(sender);
+    sender.friends.push(user);
 
     user.friendRequests = user.friendRequests.filter((id) => id.toString() !== senderId);
     await user.save();
@@ -57,9 +57,9 @@ export const acceptFriendRequest = async (req, res) => {
 // Reject a friend request
 export const rejectFriendRequest = async (req, res) => {
   try {
-    const { userId, senderId } = req.body;
+    const {  senderId } = req.body;
 
-    const user = await User.findById(userId);
+    const user = await User.findById(req.user._id);
 
     if (!user) return res.status(404).json({ message: "User not found." });
 
@@ -75,7 +75,7 @@ export const rejectFriendRequest = async (req, res) => {
 // Get user's friends list
 export const getFriends = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).populate("friends", "username email");
+    const user = await User.findById(req.user._id).populate("friends", "fullName email profilePic");
 
     if (!user) return res.status(404).json({ message: "User not found." });
 
@@ -88,11 +88,39 @@ export const getFriends = async (req, res) => {
 // Get user's pending friend requests
 export const getFriendRequests = async (req, res) => {
   try {
-    const user = await User.findById(req.body.userId).populate("friendRequests", "username email");
-
+    const user = await User.findById(req.user._id).populate("friendRequests", "fullName email profilePic");
     if (!user) return res.status(404).json({ message: "User not found." });
-
     res.status(200).json(user.friendRequests);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// Unfriend a user
+export const unfriend = async (req, res) => {
+  try {
+    const { friendId } = req.body;
+    const userId = req.user._id;
+
+    const [user, friend] = await Promise.all([
+      User.findById(userId),
+      User.findById(friendId)
+    ]);
+
+    if (!user || !friend) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Remove from both users' friend lists
+    user.friends = user.friends.filter(id => id.toString() !== friendId);
+    friend.friends = friend.friends.filter(id => id.toString() !== userId);
+
+    await Promise.all([user.save(), friend.save()]);
+
+    res.status(200).json({ 
+      message: "Successfully unfriended.",
+      friendId: friend._id
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

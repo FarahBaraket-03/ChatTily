@@ -1,6 +1,7 @@
 import Chat from "../models/chat.model.js";
 import MessageGroup from "../models/messageGroup.model.js";
 import User from "../models/user.model.js";
+import cloudinary from "../lib/cloudinary.js";
 import { getReceiverSocketId, io  } from "../lib/socket.js";
 // Create a group chat
 export const createGroupChat = async (req, res) => {
@@ -50,7 +51,7 @@ export const getGroupMessages = async (req, res) => {
     const { chatId } = req.params;
 
     const messages = await MessageGroup.find({ chatId })
-      .populate("senderId", "-password")
+      .populate("senderId", "_id fullName profilePic")
       .sort({ createdAt: 1 });
 
     res.status(200).json(messages);
@@ -67,9 +68,16 @@ export const sendGroupMessage = async (req, res) => {
     const { text , image} = req.body;
     const senderId = req.user._id;
 
+    let imageUrl;
+        if (image) {
+          // Upload base64 image to cloudinary
+          const uploadResponse = await cloudinary.uploader.upload(image);
+          imageUrl = uploadResponse.secure_url;
+        }
+
     const newMessage = new MessageGroup({
       text,
-      image,
+      image : imageUrl,
       chatId,
       senderId,
     });
@@ -208,6 +216,41 @@ export const deleteGroupChat = async (req, res) => {
     res.status(200).json({ message: "Group chat deleted successfully" });
   } catch (error) {
     console.error("Error in deleteGroupChat: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const deleteGroupMessage = async (req, res) => {
+  try {
+    const { id: messageId } = req.params;
+    const userId = req.user._id;
+
+    const message = await MessageGroup.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    const chat = await Chat.findById(message.chatId);
+    const isAdmin = chat.admin.toString() === userId.toString();
+    
+    if (message.senderId.toString() !== userId.toString() && !isAdmin) {
+      return res.status(403).json({ error: "You can only delete your own messages or be admin" });
+    }
+
+    // Soft delete
+    message.isDeleted = true;
+    await message.save();
+
+    chat.members.forEach((member) => {
+      const memberSocketId = getReceiverSocketId(member);
+      if (memberSocketId) {
+        io.to(memberSocketId).emit("groupMessageUpdated", message);
+      }
+    });
+
+    res.status(200).json(message);
+  } catch (error) {
+    console.error("Error in deleteGroupMessage: ", error.message);
     res.status(500).json({ error: "Internal server error" });
   }
 };

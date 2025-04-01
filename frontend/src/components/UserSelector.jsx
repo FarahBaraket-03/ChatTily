@@ -1,26 +1,25 @@
 import { useEffect, useState } from "react";
-import { axiosInstance } from "../lib/axios";
 import { useAuthStore } from "../store/useAuthStore"; // Import the auth store
+import { useFriendStore } from "../store/useFriendStore";
 
 const UserSelector = ({ selectedUsers, setSelectedUsers }) => {
   const [users, setUsers] = useState([]);
   const { authUser } = useAuthStore(); // Get the current user
+  const {friends,getAllFriends}=useFriendStore();
 
   // Fetch all users when the component mounts
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await axiosInstance.get("/auth/users");
-        // Filter out the current user from the list
-        const filteredUsers = res.data.filter((user) => user._id !== authUser._id);
-        setUsers(filteredUsers);
+       getAllFriends();
+        setUsers(friends);
       } catch (error) {
         console.error("Failed to fetch users:", error);
       }
     };
 
     fetchUsers();
-  }, [authUser._id]);
+  }, [authUser._id, getAllFriends,friends]); // Fetch users when authUser changes
 
   const toggleUserSelection = (userId) => {
     if (selectedUsers.includes(userId)) {

@@ -97,12 +97,26 @@ export const useGroupChatStore = create((set, get) => ({
         set((state) => ({ groupMessages: [...state.groupMessages, newMessage] }));
       }
     });
+    socket.on("groupMessageDeleted", (deletedMessageId) => {
+      set((state) => ({
+        groupMessages: state.groupMessages.filter((msg) => msg._id !== deletedMessageId),
+      }));
+    });
+    socket.on("groupMessageUpdated", (updatedMessage) => {
+      set((state) => ({
+        groupMessages: state.groupMessages.map(msg =>
+          msg._id === updatedMessage._id ? updatedMessage : msg
+        ),
+      }));
+    });
   },
 
   //? Unsubscribe from group messages
   unsubscribeFromGroupMessages: () => {
     const socket = useAuthStore.getState().socket;
-    socket.off("newGroupMessage");
+    if (socket) { // Add null check
+      socket.off("newGroupMessage");
+    }
   },
 
   // Set the currently selected group chat
@@ -174,6 +188,19 @@ export const useGroupChatStore = create((set, get) => ({
       }));
     } catch (error) {
       console.error("Failed to delete group chat:", error);
+    }
+  },
+
+  deleteGroupMessage: async (messageId) => {
+    try {
+      const res = await axiosInstance.patch(`/group/group/messages/${messageId}`, { isDeleted: true });
+      set((state) => ({
+        groupMessages: state.groupMessages.map(msg =>
+          msg._id === messageId ? res.data : msg
+        ),
+      }));
+    } catch (error) {
+      console.error("Failed to delete group message:", error);
     }
   },
   
