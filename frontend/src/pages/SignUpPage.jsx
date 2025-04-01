@@ -6,9 +6,6 @@ import { Link } from "react-router-dom";
 import AuthImagePattern from "../components/AuthImagePattern";
 import toast from "react-hot-toast";
 
-import { jwtDecode } from "jwt-decode";
-
-
 const SignUpPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,7 +13,6 @@ const SignUpPage = () => {
     email: "",
     password: "",
   });
-
 
   const { signup, isSigningUp } = useAuthStore();
 
@@ -37,28 +33,6 @@ const SignUpPage = () => {
 
     if (success === true) signup(formData);
   };
-
-  // const login = useGoogleLogin({
-  //   onSuccess: codeResponse => console.log(codeResponse),
-  //   flow: 'auth-code',
-  // });
-    
-
-    const handleGoogleResponse = async (response) => {
-      if (response.error) {
-        console.log("Erreur lors de l'authentification Google");
-        return;
-      }
-        const { email, name, picture } = response;
-        const staticPassword = "motDePasseFixe123";
-       const userData = {
-        fullName: name,
-        email,
-        password: staticPassword,
-        profilepic:picture
-       }
-      signup(userData)
-    }
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
@@ -155,14 +129,7 @@ const SignUpPage = () => {
                 "Create Account"
               )}
             </button>
-            
           </form>
-
-         
-
-
-
-
 
           <div className="text-center">
             <p className="text-base-content/60">
@@ -178,12 +145,10 @@ const SignUpPage = () => {
       {/* right side */}
 
       <AuthImagePattern
-        
         title="Join our community"
         subtitle="Connect with friends, share moments, and stay in touch with your loved ones."
-        imageSrc={Chat}
       />
     </div>
   );
 };
-export default SignUpPage
+export default SignUpPage;
