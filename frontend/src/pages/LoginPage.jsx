@@ -4,7 +4,7 @@ import AuthImagePattern from "../components/AuthImagePattern";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Lock, Mail, MessageSquare } from "lucide-react";
 
-import { useGoogleLogin,GoogleLogin } from '@react-oauth/google';
+import { GoogleLogin } from '@react-oauth/google';
 import { jwtDecode } from "jwt-decode";
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -18,15 +18,7 @@ const LoginPage = () => {
     e.preventDefault();
     login(formData);
   };
-  const googleLogin = useGoogleLogin({
-    onSuccess: (credentialResponse) => {
-      const userInfo = jwtDecode(credentialResponse.credential);
-      handleGoogleResponse(userInfo);
-    },
-    onError: () => {
-      console.log('Login Failed');
-    },
-  });
+  
   const handleGoogleResponse = async (response) => {
     if (response.error) {
       console.log("Erreur lors de l'authentification Google");
@@ -123,9 +115,16 @@ const LoginPage = () => {
                 "Sign in"
               )}
        </button>
-       <button onClick={() => googleLogin()} className="btn w-full">
-        Sign in with Google
-        </button>
+       <GoogleLogin   className="btn w-full"
+                            onSuccess={credentialResponse => {
+                              const userInfo = jwtDecode(credentialResponse.credential);
+                              console.log("Utilisateur :", userInfo);
+                             handleGoogleResponse(userInfo);
+                             }}
+                             onError={() => {
+                              console.log('Login Failed');
+                            }}
+                /> 
           </form>
 
           <div className="text-center">
