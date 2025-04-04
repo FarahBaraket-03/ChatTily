@@ -36,25 +36,30 @@ const CurrentUserProfile = () => {
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-
+  
     if (file.size > 2 * 1024 * 1024) {
       toast.error("Image size should be less than 2MB");
       return;
     }
-
+  
+    const toastId = toast.loading("Uploading image...");
     const reader = new FileReader();
-    reader.onloadstart = () => toast.loading("Uploading image...");
+    
     reader.onload = async () => {
       const base64Image = reader.result;
       setSelectedImg(base64Image);
       try {
         await updateProfile({ profilePic: base64Image });
-        toast.success("Profile picture updated!");
+        toast.success("Profile picture updated!", { id: toastId });
       } catch (error) {
-        toast.error("Failed to update profile picture");
+        toast.error("Failed to update profile picture", { id: toastId });
       }
     };
-    reader.onerror = () => toast.error("Error reading image file");
+    
+    reader.onerror = () => {
+      toast.error("Error reading image file", { id: toastId });
+    };
+    
     reader.readAsDataURL(file);
   };
 

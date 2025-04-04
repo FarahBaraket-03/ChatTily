@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect,useState } from 'react';
 import { useFriendStore } from '../store/useFriendStore';
 import toast from 'react-hot-toast';
 
 const Notification = () => {
+  // Add loading states at the component level
+const [acceptingId, setAcceptingId] = useState(null);
+const [decliningId, setDecliningId] = useState(null);
   const { friendRequests, getAllFriends, getFriendRequests, acceptFriendRequest, declineFriendRequest } = useFriendStore();
 
   useEffect(() => {
@@ -18,26 +21,30 @@ const Notification = () => {
   }, [getFriendRequests]);
 
   const handleAccept = async (senderId) => {
-    try {
-      await acceptFriendRequest(senderId);
-      toast.success("Friend request accepted!");
-      // Refresh both friends list and requests
-      await Promise.all([getAllFriends(), getFriendRequests()]);
-    } catch (error) {
-      toast.error(error.message || "Failed to accept request");
-    }
-  };
+  setAcceptingId(senderId);
+  try {
+    await acceptFriendRequest(senderId);
+    toast.success("Friend request accepted!");
+    await Promise.all([getAllFriends(), getFriendRequests()]);
+  } catch (error) {
+    toast.error(error.message || "Failed to accept request");
+  } finally {
+    setAcceptingId(null);
+  }
+};
 
-  const handleDecline = async (senderId) => {
-    try {
-      await declineFriendRequest(senderId);
-      toast.success("Friend request declined");
-      await getFriendRequests(); // Refresh requests
-    } catch (error) {
-      toast.error(error.message || "Failed to decline request");
-    }
-  };
-
+const handleDecline = async (senderId) => {
+  setDecliningId(senderId);
+  try {
+    await declineFriendRequest(senderId);
+    toast.success("Friend request declined");
+    await getFriendRequests();
+  } catch (error) {
+    toast.error(error.message || "Failed to decline request");
+  } finally {
+    setDecliningId(null);
+  }
+};
   return (
     <div className="h-screen bg-base-200">
       <div className="flex items-center justify-center pt-20 px-4">
@@ -78,18 +85,28 @@ const Notification = () => {
                       </div>
                     </div>
                     <div className="flex space-x-2">
-                      <button 
-                        onClick={() => handleAccept(request._id)}
-                        className="btn btn-sm btn-primary"
-                      >
-                        Accept
-                      </button>
-                      <button 
-                        onClick={() => handleDecline(request._id)}
-                        className="btn btn-sm btn-error"
-                      >
-                        Decline
-                      </button>
+                    <button 
+  onClick={() => handleAccept(request._id)}
+  className="btn btn-sm btn-primary"
+  disabled={acceptingId === request._id}
+>
+  {acceptingId === request._id ? (
+    <span className="loading loading-spinner loading-xs"></span>
+  ) : (
+    "Accept"
+  )}
+</button>
+<button 
+  onClick={() => handleDecline(request._id)}
+  className="btn btn-sm btn-error"
+  disabled={decliningId === request._id}
+>
+  {decliningId === request._id ? (
+    <span className="loading loading-spinner loading-xs"></span>
+  ) : (
+    "Decline"
+  )}
+</button>
                     </div>
                   </div>
                 ))}
