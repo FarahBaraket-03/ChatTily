@@ -111,9 +111,13 @@ export const unfriend = async (req, res) => {
       return res.status(404).json({ message: "User not found." });
     }
 
+    // Convert both to strings for comparison
+    const friendIdStr = friendId.toString();
+    const userIdStr = userId.toString();
+
     // Remove from both users' friend lists
-    user.friends = user.friends.filter(id => id.toString() !== friendId);
-    friend.friends = friend.friends.filter(id => id.toString() !== userId);
+    user.friends = user.friends.filter(id => id.toString() !== friendIdStr);
+    friend.friends = friend.friends.filter(id => id.toString() !== userIdStr);
 
     await Promise.all([user.save(), friend.save()]);
 
