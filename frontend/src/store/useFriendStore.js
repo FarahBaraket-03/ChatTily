@@ -14,8 +14,12 @@ export const useFriendStore = create((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const res = await axiosInstance.get(`/friend/friends`);
-      set({ friends: res.data, isLoading: false });
-      return res.data;
+      const uniqueFriends = res.data.filter(
+        (friend, index, self) => 
+          index === self.findIndex(f => f._id === friend._id)
+      );
+      set({ friends: uniqueFriends, isLoading: false });
+      return uniqueFriends;
     } catch (error) {
       const errorMsg = error.response?.data?.message || "Failed to fetch friends";
       set({ error: errorMsg, isLoading: false });
@@ -141,14 +145,23 @@ export const useFriendStore = create((set, get) => ({
     const socket = useAuthStore.getState().socket;
     if (!socket) return;
   
+    // Clear existing listeners to prevent duplicates
+    socket.off("unfriended");
+    
     socket.on("unfriended", (data) => {
       set(state => ({
         friends: state.friends.filter(friend => friend._id !== data.friendId)
       }));
     });
   
+    // Add listener for friend updates
+    socket.on("friendUpdate", (updatedFriends) => {
+      set({ friends: updatedFriends });
+    });
+  
     return () => {
       socket.off("unfriended");
+      socket.off("friendUpdate");
     };
   }
 

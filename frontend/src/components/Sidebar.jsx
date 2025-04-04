@@ -25,7 +25,9 @@ const Sidebar = () => {
     fetchGroupChats();
   }, [getUsers, fetchGroupChats]);
 
-  const filteredUsers = friends.filter(
+  const filteredUsers = [...new Map(
+    friends.map(user => [user._id, user])
+  ).values()].filter(
     (user) => (!showOnlineOnly || onlineUsers.includes(user._id))
   );
 
