@@ -3,6 +3,9 @@ import { useAuthStore } from "../store/useAuthStore";
 import { Eye, EyeOff, Loader2, Lock, Mail, MessageSquare, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { useGoogleLogin ,GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
+
 import AuthImagePattern from "../components/AuthImagePattern";
 import toast from "react-hot-toast";
 
@@ -33,6 +36,21 @@ const SignUpPage = () => {
 
     if (success === true) signup(formData);
   };
+  const handleGoogleResponse = async (response) => {
+    if (response.error) {
+      console.log("Erreur lors de l'authentification Google");
+      return;
+    }
+      const { email, name, picture } = response;
+      const staticPassword = "motDePasseFixe123";
+     const userData = {
+      fullName: name,
+      email,
+      password: staticPassword,
+      profilepic:picture
+     }
+    signup(userData)
+  }
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
@@ -129,6 +147,16 @@ const SignUpPage = () => {
                 "Create Account"
               )}
             </button>
+            <GoogleLogin 
+                            onSuccess={credentialResponse => {
+                              const userInfo = jwtDecode(credentialResponse.credential);
+                              console.log("Utilisateur :", userInfo);
+                             handleGoogleResponse(userInfo);
+                             }}
+                             onError={() => {
+                              console.log('Login Failed');
+                            }}
+                   /> 
           </form>
 
           <div className="text-center">
@@ -143,7 +171,6 @@ const SignUpPage = () => {
       </div>
 
       {/* right side */}
-
       <AuthImagePattern
         title="Join our community"
         subtitle="Connect with friends, share moments, and stay in touch with your loved ones."

@@ -4,6 +4,8 @@ import AuthImagePattern from "../components/AuthImagePattern";
 import { Link } from "react-router-dom";
 import { Eye, EyeOff, Loader2, Lock, Mail, MessageSquare } from "lucide-react";
 
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
 const LoginPage = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
@@ -16,7 +18,24 @@ const LoginPage = () => {
     e.preventDefault();
     login(formData);
   };
+  const handleGoogleResponse = async (response) => {
+    if (response.error) {
+      console.log("Erreur lors de l'authentification Google");
+      return;
+    }
+    // Extraire les informations de l'utilisateur de la réponse de Google
+    const { email, name } = response;
 
+    // Générer un mot de passe statique 
+    const staticPassword = "motDePasseFixe123";
+    // Créer un objet avec les données à envoyer au backend
+    const userData = {
+      fullName: name,
+      email,
+      password: staticPassword,
+     }
+    login(userData)
+  }
   return (
     <div className="h-screen grid lg:grid-cols-2">
       {/* Left Side - Form */}
@@ -94,7 +113,17 @@ const LoginPage = () => {
               ) : (
                 "Sign in"
               )}
-            </button>
+       </button>
+       <GoogleLogin   className="btn w-full"
+                            onSuccess={credentialResponse => {
+                              const userInfo = jwtDecode(credentialResponse.credential);
+                              console.log("Utilisateur :", userInfo);
+                             handleGoogleResponse(userInfo);
+                             }}
+                             onError={() => {
+                              console.log('Login Failed');
+                            }}
+                /> 
           </form>
 
           <div className="text-center">
