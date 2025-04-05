@@ -79,6 +79,7 @@ sendGroupMessage: async (messageData) => {
   } catch (error) {
     console.error("Failed to send group message:", error);
     // Remove optimistic message if failed
+    const tempId = Date.now().toString();
     set(state => ({
       groupMessages: state.groupMessages.filter(msg => msg._id !== tempId)
     }));
