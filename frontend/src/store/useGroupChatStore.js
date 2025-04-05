@@ -37,42 +37,53 @@ export const useGroupChatStore = create((set, get) => ({
     }
   },
 
-  // !Fetch messages for a specific group chat
-  fetchGroupMessages: async (chatId) => {
-    set({ isGroupMessagesLoading: true });
-    try {
-      const res = await axiosInstance.get(`/group/group/messages/${chatId}`);
-      set({ groupMessages: res.data });
-    } catch (error) {
-      console.error("Failed to fetch group messages:", error);
-    } finally {
-      set({ isGroupMessagesLoading: false });
+  // In sendGroupMessage function
+sendGroupMessage: async (messageData) => {
+  try {
+    const { selectedGroupChat, groupMessages } = get();
+    if (!selectedGroupChat) {
+      throw new Error("No group chat selected");
     }
-  },
+    
+    // Optimistically update UI
+    const tempId = Date.now().toString();
+    const optimisticMessage = {
+      _id: tempId,
+      text: messageData.text,
+      image: messageData.image,
+      senderId: useAuthStore.getState().authUser._id,
+      createdAt: new Date().toISOString(),
+      isOptimistic: true
+    };
+    
+    set({ groupMessages: [...groupMessages, optimisticMessage] });
+    
+    const res = await axiosInstance.post(`/group/group/send/${selectedGroupChat._id}`, {
+      text: messageData.text,
+      image: messageData.image,
+    });
 
-  // Send a message to a group chat
-  sendGroupMessage: async (messageData) => {
-    try {
-      const { selectedGroupChat } = get(); // Access selectedGroupChat from the store's state
-      if (!selectedGroupChat) {
-        throw new Error("No group chat selected");
-      }
-      
-      const res = await axiosInstance.post(`/group/group/send/${selectedGroupChat._id}`, {text: messageData.text,
-        image: messageData.image,});
+    // Replace optimistic message with real one when response comes
+    set(state => ({
+      groupMessages: state.groupMessages.map(msg => 
+        msg._id === tempId ? res.data : msg
+      )
+    }));
 
-
-        // Emit the message to the group chat room
+    // Emit to socket
     const socket = useAuthStore.getState().socket;
     socket.emit("sendGroupMessage", {
       ...res.data,
       chatId: selectedGroupChat._id,
     });
-      // set((state) => ({ groupMessages: [...state.groupMessages, res.data] }));
-    } catch (error) {
-      console.error("Failed to send group message:", error);
-    }
-  },
+  } catch (error) {
+    console.error("Failed to send group message:", error);
+    // Remove optimistic message if failed
+    set(state => ({
+      groupMessages: state.groupMessages.filter(msg => msg._id !== tempId)
+    }));
+  }
+},
 
   // ~Create a new group chat
   createGroupChat: async (name_group, members) => {
