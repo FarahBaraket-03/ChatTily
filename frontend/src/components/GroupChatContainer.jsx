@@ -13,6 +13,7 @@ const GroupChatContainer = () => {
     isGroupMessagesLoading,
     selectedGroupChat,
     deleteGroupMessage,
+    clearSelectedGroupChat,
   } = useGroupChatStore();
   const { authUser, getUserById, socket } = useAuthStore();
   const messageEndRef = useRef(null);
@@ -20,64 +21,86 @@ const GroupChatContainer = () => {
   const [messagesWithDetails, setMessagesWithDetails] = useState([]);
   const socketListenersAdded = useRef(false);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const prevChatId = useRef(null);
+
+  // Clear state when unmounting
+  useEffect(() => {
+    return () => {
+      clearSelectedGroupChat();
+    };
+  }, [clearSelectedGroupChat]);
 
   const handleDelete = useCallback(async (messageId) => {
     setConfirmingDelete(null);
     await deleteGroupMessage(messageId);
   }, [deleteGroupMessage]);
 
-  // Improved message fetching with error handling
-  const fetchMessages = useCallback(async () => {
+  // Improved message fetching with chat switching handling
+  const fetchMessages = useCallback(async (chatId) => {
     try {
-      if (selectedGroupChat?._id) {
-        await getGroupMessages(selectedGroupChat._id);
-        setInitialLoadComplete(true);
-      }
+      setInitialLoadComplete(false);
+      await getGroupMessages(chatId);
+      setInitialLoadComplete(true);
     } catch (error) {
       console.error("Failed to fetch messages:", error);
-      setInitialLoadComplete(true); // Ensure loading state ends even on error
+      setInitialLoadComplete(true);
     }
-  }, [selectedGroupChat, getGroupMessages]);
+  }, [getGroupMessages]);
+
+  // Handle chat switching and message loading
+  useEffect(() => {
+    if (!selectedGroupChat) return;
+    
+    const currentChatId = selectedGroupChat._id;
+    if (prevChatId.current === currentChatId) return;
+
+    // Clear previous messages when switching chats
+    setMessagesWithDetails([]);
+    prevChatId.current = currentChatId;
+
+    fetchMessages(currentChatId);
+  }, [selectedGroupChat, fetchMessages]);
 
   // Socket and message management
   useEffect(() => {
-    if (!selectedGroupChat || !socket || socketListenersAdded.current) return;
+    if (!selectedGroupChat || !socket) return;
 
     const handleNewMessage = (newMessage) => {
       if (newMessage.chatId === selectedGroupChat._id) {
-        const messageExists = groupMessages.some(msg => msg._id === newMessage._id);
-        if (!messageExists) {
-          useGroupChatStore.setState(state => ({
-            groupMessages: [...state.groupMessages, newMessage]
-          }));
-        }
+        useGroupChatStore.setState(state => ({
+          groupMessages: [...state.groupMessages, newMessage]
+        }));
       }
     };
 
-    socket.on("newGroupMessage", handleNewMessage);
-    socketListenersAdded.current = true;
-
-    // Initial message load
-    fetchMessages();
+    if (!socketListenersAdded.current) {
+      socket.on("newGroupMessage", handleNewMessage);
+      socketListenersAdded.current = true;
+    }
 
     return () => {
-      if (socket) {
+      if (socket && socketListenersAdded.current) {
         socket.off("newGroupMessage", handleNewMessage);
+        socketListenersAdded.current = false;
       }
-      socketListenersAdded.current = false;
     };
-  }, [selectedGroupChat, socket, groupMessages, fetchMessages]);
+  }, [selectedGroupChat, socket]);
 
-  // Improved scroll handling
+  // Improved scroll handling with chat switching
   useEffect(() => {
     if (!initialLoadComplete || !messageEndRef.current) return;
     
     const scrollToBottom = () => {
       try {
-        messageEndRef.current?.scrollIntoView({
-          behavior: "smooth",
-          block: "nearest"
-        });
+        // Reset scroll position first
+        messageEndRef.current?.scrollIntoView();
+        // Then smooth scroll
+        setTimeout(() => {
+          messageEndRef.current?.scrollIntoView({
+            behavior: "smooth",
+            block: "end"
+          });
+        }, 50);
       } catch (error) {
         console.warn("Scroll error:", error);
         messageEndRef.current?.scrollIntoView();
@@ -88,7 +111,7 @@ const GroupChatContainer = () => {
     return () => clearTimeout(timer);
   }, [groupMessages, initialLoadComplete]);
 
-  // Sender details population
+  // Sender details population with caching
   const fetchSenderDetails = useCallback(async (message) => {
     if (typeof message.senderId === "string") {
       try {
@@ -108,23 +131,36 @@ const GroupChatContainer = () => {
     }
 
     const updateMessages = async () => {
-      const needsDetails = groupMessages.filter(msg => typeof msg.senderId === "string");
+      const needsDetails = groupMessages.filter(msg => 
+        typeof msg.senderId === "string" && 
+        !messagesWithDetails.some(m => m._id === msg._id)
+      );
+
       if (!needsDetails.length) {
-        setMessagesWithDetails([...groupMessages]);
+        // Use existing details if no new messages need fetching
+        const updatedMessages = groupMessages.map(msg => {
+          const existing = messagesWithDetails.find(m => m._id === msg._id);
+          return existing || msg;
+        });
+        setMessagesWithDetails(updatedMessages);
         return;
       }
 
       const updated = await Promise.all(needsDetails.map(fetchSenderDetails));
       setMessagesWithDetails(prev => {
-        const existing = prev.filter(msg => typeof msg.senderId !== "string");
-        return [...existing, ...updated].sort((a, b) => 
+        const existing = prev.filter(p => 
+          !groupMessages.some(gm => gm._id === p._id)
+        );
+        return [...existing, ...updated, ...groupMessages.filter(gm => 
+          typeof gm.senderId !== "string"
+        )].sort((a, b) => 
           new Date(a.createdAt) - new Date(b.createdAt)
         );
       });
     };
 
     updateMessages();
-  }, [groupMessages, fetchSenderDetails]);
+  }, [groupMessages, fetchSenderDetails, messagesWithDetails]);
 
   if (isGroupMessagesLoading && !initialLoadComplete) {
     return (
