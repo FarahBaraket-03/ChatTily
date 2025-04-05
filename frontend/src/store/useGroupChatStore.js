@@ -38,53 +38,54 @@ export const useGroupChatStore = create((set, get) => ({
   },
 
   // In sendGroupMessage function
-sendGroupMessage: async (messageData) => {
-  try {
-    const { selectedGroupChat, groupMessages } = get();
-    if (!selectedGroupChat) {
-      throw new Error("No group chat selected");
+  sendGroupMessage: async (messageData) => {
+    try {
+      const { selectedGroupChat, groupMessages } = get();
+      if (!selectedGroupChat) throw new Error("No group chat selected");
+      
+      // Optimistic update
+      const tempId = Date.now().toString();
+      const optimisticMessage = {
+        _id: tempId,
+        text: messageData.text,
+        image: messageData.image,
+        senderId: useAuthStore.getState().authUser._id,
+        createdAt: new Date().toISOString(),
+        isOptimistic: true
+      };
+      
+      set({ groupMessages: [...groupMessages, optimisticMessage] });
+      
+      // Actual API call
+      const res = await axiosInstance.post(
+        `/group/group/send/${selectedGroupChat._id}`,
+        { text: messageData.text, image: messageData.image }
+      );
+  
+      // Replace optimistic message with real response
+      set(state => ({
+        groupMessages: state.groupMessages.map(msg => 
+          msg._id === tempId ? res.data : msg
+        )
+      }));
+  
+      // Emit to socket
+      const socket = useAuthStore.getState().socket;
+      if (socket) {
+        socket.emit("sendGroupMessage", {
+          ...res.data,
+          chatId: selectedGroupChat._id,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to send group message:", error);
+      // Remove optimistic message on error
+      const tempId = Date.now().toString();
+      set(state => ({
+        groupMessages: state.groupMessages.filter(msg => msg._id !== tempId)
+      }));
     }
-    
-    // Optimistically update UI
-    const tempId = Date.now().toString();
-    const optimisticMessage = {
-      _id: tempId,
-      text: messageData.text,
-      image: messageData.image,
-      senderId: useAuthStore.getState().authUser._id,
-      createdAt: new Date().toISOString(),
-      isOptimistic: true
-    };
-    
-    set({ groupMessages: [...groupMessages, optimisticMessage] });
-    
-    const res = await axiosInstance.post(`/group/group/send/${selectedGroupChat._id}`, {
-      text: messageData.text,
-      image: messageData.image,
-    });
-
-    // Replace optimistic message with real one when response comes
-    set(state => ({
-      groupMessages: state.groupMessages.map(msg => 
-        msg._id === tempId ? res.data : msg
-      )
-    }));
-
-    // Emit to socket
-    const socket = useAuthStore.getState().socket;
-    socket.emit("sendGroupMessage", {
-      ...res.data,
-      chatId: selectedGroupChat._id,
-    });
-  } catch (error) {
-    console.error("Failed to send group message:", error);
-    // Remove optimistic message if failed
-    const tempId = Date.now().toString();
-    set(state => ({
-      groupMessages: state.groupMessages.filter(msg => msg._id !== tempId)
-    }));
-  }
-},
+  },
 
   // ~Create a new group chat
   createGroupChat: async (name_group, members) => {

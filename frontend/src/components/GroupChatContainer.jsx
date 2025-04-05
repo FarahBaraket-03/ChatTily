@@ -18,26 +18,26 @@ const GroupChatContainer = () => {
   const messageEndRef = useRef(null);
   const [confirmingDelete, setConfirmingDelete] = useState(null);
   const [messagesWithDetails, setMessagesWithDetails] = useState([]);
+  const socketListenersAdded = useRef(false); // Track if listeners are added
 
-  // Memoized delete handler
   const handleDelete = useCallback(async (messageId) => {
     setConfirmingDelete(null);
     await deleteGroupMessage(messageId);
   }, [deleteGroupMessage]);
 
-  // Improved socket subscription management
+  // Socket and message management
   useEffect(() => {
-    if (!selectedGroupChat || !socket) return;
+    if (!selectedGroupChat || !socket || socketListenersAdded.current) return;
 
-    // Fetch messages when chat is selected
-    getGroupMessages(selectedGroupChat._id);
-
-    // Socket event handlers
     const handleNewMessage = (newMessage) => {
       if (newMessage.chatId === selectedGroupChat._id) {
-        useGroupChatStore.setState(state => ({
-          groupMessages: [...state.groupMessages, newMessage]
-        }));
+        // Check if message already exists to prevent duplicates
+        const messageExists = groupMessages.some(msg => msg._id === newMessage._id);
+        if (!messageExists) {
+          useGroupChatStore.setState(state => ({
+            groupMessages: [...state.groupMessages, newMessage]
+          }));
+        }
       }
     };
 
@@ -55,18 +55,25 @@ const GroupChatContainer = () => {
       }));
     };
 
-    // Subscribe to socket events
+    // Add event listeners
     socket.on("newGroupMessage", handleNewMessage);
     socket.on("groupMessageDeleted", handleMessageDeleted);
     socket.on("groupMessageUpdated", handleMessageUpdated);
+    socketListenersAdded.current = true;
 
-    // Cleanup function
+    // Initial message load
+    getGroupMessages(selectedGroupChat._id);
+
     return () => {
-      socket.off("newGroupMessage", handleNewMessage);
-      socket.off("groupMessageDeleted", handleMessageDeleted);
-      socket.off("groupMessageUpdated", handleMessageUpdated);
+      // Cleanup only if socket still exists
+      if (socket) {
+        socket.off("newGroupMessage", handleNewMessage);
+        socket.off("groupMessageDeleted", handleMessageDeleted);
+        socket.off("groupMessageUpdated", handleMessageUpdated);
+      }
+      socketListenersAdded.current = false;
     };
-  }, [selectedGroupChat, socket, getGroupMessages]);
+  }, [selectedGroupChat, socket, getGroupMessages, groupMessages]);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
