@@ -76,11 +76,27 @@ const GroupChatContainer = () => {
   }, [selectedGroupChat, socket, getGroupMessages, groupMessages]);
 
   // Auto-scroll to bottom when messages change
-  useEffect(() => {
+  // Update your scroll-to-bottom useEffect with this improved version
+useEffect(() => {
+  const scrollToBottom = () => {
     if (messageEndRef.current) {
-      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
+      try {
+        messageEndRef.current.scrollIntoView({ 
+          behavior: "smooth",
+          block: "nearest", // Changed from default 'start'
+          inline: "nearest"
+        });
+      } catch (error) {
+        console.warn("Failed to scroll to bottom:", error);
+      }
     }
-  }, [groupMessages]);
+  };
+
+  // Add a small timeout to ensure DOM is updated
+  const timer = setTimeout(scrollToBottom, 100);
+  
+  return () => clearTimeout(timer);
+}, [groupMessages]); // Only trigger when groupMessages changes
 
   // Memoized sender details fetcher
   const fetchSenderDetails = useCallback(async (message) => {
