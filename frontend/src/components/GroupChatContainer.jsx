@@ -18,12 +18,26 @@ const GroupChatContainer = () => {
   const messageEndRef = useRef(null);
   const [confirmingDelete, setConfirmingDelete] = useState(null);
   const [messagesWithDetails, setMessagesWithDetails] = useState([]);
-  const socketListenersAdded = useRef(false); // Track if listeners are added
+  const socketListenersAdded = useRef(false);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   const handleDelete = useCallback(async (messageId) => {
     setConfirmingDelete(null);
     await deleteGroupMessage(messageId);
   }, [deleteGroupMessage]);
+
+  // Improved message fetching with error handling
+  const fetchMessages = useCallback(async () => {
+    try {
+      if (selectedGroupChat?._id) {
+        await getGroupMessages(selectedGroupChat._id);
+        setInitialLoadComplete(true);
+      }
+    } catch (error) {
+      console.error("Failed to fetch messages:", error);
+      setInitialLoadComplete(true); // Ensure loading state ends even on error
+    }
+  }, [selectedGroupChat, getGroupMessages]);
 
   // Socket and message management
   useEffect(() => {
@@ -31,7 +45,6 @@ const GroupChatContainer = () => {
 
     const handleNewMessage = (newMessage) => {
       if (newMessage.chatId === selectedGroupChat._id) {
-        // Check if message already exists to prevent duplicates
         const messageExists = groupMessages.some(msg => msg._id === newMessage._id);
         if (!messageExists) {
           useGroupChatStore.setState(state => ({
@@ -41,110 +54,79 @@ const GroupChatContainer = () => {
       }
     };
 
-    const handleMessageDeleted = (deletedMessageId) => {
-      useGroupChatStore.setState(state => ({
-        groupMessages: state.groupMessages.filter(msg => msg._id !== deletedMessageId)
-      }));
-    };
-
-    const handleMessageUpdated = (updatedMessage) => {
-      useGroupChatStore.setState(state => ({
-        groupMessages: state.groupMessages.map(msg => 
-          msg._id === updatedMessage._id ? updatedMessage : msg
-        )
-      }));
-    };
-
-    // Add event listeners
     socket.on("newGroupMessage", handleNewMessage);
-    socket.on("groupMessageDeleted", handleMessageDeleted);
-    socket.on("groupMessageUpdated", handleMessageUpdated);
     socketListenersAdded.current = true;
 
     // Initial message load
-    getGroupMessages(selectedGroupChat._id);
+    fetchMessages();
 
     return () => {
-      // Cleanup only if socket still exists
       if (socket) {
         socket.off("newGroupMessage", handleNewMessage);
-        socket.off("groupMessageDeleted", handleMessageDeleted);
-        socket.off("groupMessageUpdated", handleMessageUpdated);
       }
       socketListenersAdded.current = false;
     };
-  }, [selectedGroupChat, socket, getGroupMessages, groupMessages]);
+  }, [selectedGroupChat, socket, groupMessages, fetchMessages]);
 
-  // Auto-scroll to bottom when messages change
-  // Update your scroll-to-bottom useEffect with this improved version
-useEffect(() => {
-  const scrollToBottom = () => {
-    if (messageEndRef.current) {
+  // Improved scroll handling
+  useEffect(() => {
+    if (!initialLoadComplete || !messageEndRef.current) return;
+    
+    const scrollToBottom = () => {
       try {
-        messageEndRef.current.scrollIntoView({ 
+        messageEndRef.current?.scrollIntoView({
           behavior: "smooth",
-          block: "nearest", // Changed from default 'start'
-          inline: "nearest"
+          block: "nearest"
         });
       } catch (error) {
-        console.warn("Failed to scroll to bottom:", error);
+        console.warn("Scroll error:", error);
+        messageEndRef.current?.scrollIntoView();
       }
-    }
-  };
+    };
 
-  // Add a small timeout to ensure DOM is updated
-  const timer = setTimeout(scrollToBottom, 100);
-  
-  return () => clearTimeout(timer);
-}, [groupMessages]); // Only trigger when groupMessages changes
+    const timer = setTimeout(scrollToBottom, 100);
+    return () => clearTimeout(timer);
+  }, [groupMessages, initialLoadComplete]);
 
-  // Memoized sender details fetcher
+  // Sender details population
   const fetchSenderDetails = useCallback(async (message) => {
     if (typeof message.senderId === "string") {
       try {
-        const sender = await getUserById(message.senderId);
-        return { ...message, senderId: sender };
+        return { ...message, senderId: await getUserById(message.senderId) };
       } catch (error) {
-        console.error("Failed to fetch sender details", error);
+        console.error("Failed to fetch sender:", error);
         return message;
       }
     }
     return message;
   }, [getUserById]);
 
-  // Optimized sender details population
   useEffect(() => {
-    if (groupMessages.length === 0) return;
-
-    // Only process messages that need sender details
-    const messagesNeedingDetails = groupMessages.filter(
-      msg => typeof msg.senderId === "string"
-    );
-
-    if (messagesNeedingDetails.length > 0) {
-      const fetchDetails = async () => {
-        const updatedMessages = await Promise.all(
-          messagesNeedingDetails.map(fetchSenderDetails)
-        );
-        
-        // Merge with existing messages that already have details
-        setMessagesWithDetails(prev => {
-          const existingMessages = prev.filter(
-            msg => typeof msg.senderId !== "string"
-          );
-          return [...existingMessages, ...updatedMessages]
-            .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-        });
-      };
-
-      fetchDetails();
-    } else {
-      // If all messages already have details, just update the array
-      setMessagesWithDetails([...groupMessages]);
+    if (!groupMessages.length) {
+      setMessagesWithDetails([]);
+      return;
     }
+
+    const updateMessages = async () => {
+      const needsDetails = groupMessages.filter(msg => typeof msg.senderId === "string");
+      if (!needsDetails.length) {
+        setMessagesWithDetails([...groupMessages]);
+        return;
+      }
+
+      const updated = await Promise.all(needsDetails.map(fetchSenderDetails));
+      setMessagesWithDetails(prev => {
+        const existing = prev.filter(msg => typeof msg.senderId !== "string");
+        return [...existing, ...updated].sort((a, b) => 
+          new Date(a.createdAt) - new Date(b.createdAt)
+        );
+      });
+    };
+
+    updateMessages();
   }, [groupMessages, fetchSenderDetails]);
 
-  if (isGroupMessagesLoading) {
+  if (isGroupMessagesLoading && !initialLoadComplete) {
     return (
       <div className="flex-1 flex flex-col overflow-auto">
         <GroupChatHeader />
@@ -246,7 +228,10 @@ useEffect(() => {
             </div>
           );
         })}
-        <div ref={messageEndRef} />
+        <div 
+          ref={messageEndRef} 
+          style={{ height: '1px', width: '100%' }}
+        />
       </div>
       <MessageInputGroup />
     </div>
